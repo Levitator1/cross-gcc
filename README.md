@@ -9,18 +9,18 @@ reasonable to expect that a software-float binary should run fine despite the pr
 that doesn't seem to be the case. Maybe there is some clash between the software implementation and stubs used to calculate
 on hardware. Who knows.
 
-Anyway, this method expects you to have some means of acquiring a "sysroot" for your target architecture. Probably the
-simplest way to do that is to install (via apt-get or other package manager, etc.)  all of the libraries and headers you need on an example of the target
+Anyway, this method expects you to have some means of acquiring headers and libraries for your target system to construct a sysroot. Probably the
+simplest way to do that is to install (via apt-get or other package manager, etc.) all of the libraries and headers you need on an example of the target
 system. Now you have a target filesystem tree containing a live installation of libc and other libraries, if you wish,
-like GTK and so forth. 
+like GTK and so forth. There are two scripts provided to facilitate copying the relevant sysroot files from a live system. 
 
-Note that I simply chose the latest version of each software package which was available at the time, and found this particular
+Note that I simply chose the latest version of each dependency package which was available at the time, and found this particular
 configuration to work. There's probably any number of other dependency combinations that will also work.
 
 # Step 0: Clone the project and create a working directory
 	git clone https://github.com/Levitator1/cross-gcc.git
-	mkdir gcc-cross-build
-	cd gcc-cross-build
+	mkdir cross-gcc-build
+	cd cross-gcc-build
 
 # Step 1: Build a target binutils:
 
@@ -31,9 +31,9 @@ configuration to work. There's probably any number of other dependency combinati
 	make -j `nproc`
 	make install
 
-"--prefix" is a common autconf option which allows you to specify a directory tree into which to perform the install. In this case, we install local to the current user.
-You can point the makefile's install target at $HOME/arm-tools, and then add $HOME/arm-tools to your PATH environment variable and then call programs installed there
-as if they were installed normally. Assuming you use bash, see the bash documentation to see how to ensure that this happens upon shell initialization.
+"--prefix" is a common autconf option which allows you to specify a directory tree into which to perform the install. Usually this is implicitly "/"
+for a system-wide install. In our case, we install local to the current user. You can thus point the makefile's install target at $HOME/arm-tools, and then add $HOME/arm-tools to your PATH environment variable, and then call programs installed there
+as if they were installed normally. Assuming you use bash, see the bash documentation to see how to ensure that PATH gets updated upon shell initialization.
 A command like this should suffice:
 
 	PATH=$HOME/arm-tools:$HOME
@@ -45,7 +45,7 @@ system. To ask the target system what its GNU triplet is, do:
 
 	gcc -dumpmachine
 
-- "arm": is the target architecture. The Raspberry Pi uses a processor running the armv6 instruction set, so we specify "arm". 
+- "arm": is the target architecture. The Raspberry Pi Zero uses a processor running the armv6 instruction set, so we specify "arm". 
 	Other examples of valid arch strings are "i386" for the 32-bit PC, or "x86_64" for 64-bit PCs
 
 - "linux": is the system vendor. I'm not sure what the exact implications are, but this is the correct string for
@@ -60,7 +60,7 @@ system. To ask the target system what its GNU triplet is, do:
 - "hf": This means "hard float". The Pi Zero has a hardware vector unit which serves as a hardware floating point unit. The GCC build script does not
 	know what "hf" means, so it is necessary to specify additionally, to use hard float. This is explained in Step 6.
 
-You can consult the contents of "config.sub" in an autoconf build tree to see examples of supported triplet elements. Most GNU packages use
+You can consult the contents of "config.sub" in an autoconf source tree to see examples of supported triplet elements. Most GNU packages use
 autoconf as their build system. Again, though, we are targeting an existing system, so we will just dumbly copy whatever the target's native
 compiler was built with.
 
@@ -114,9 +114,9 @@ Then, we run fix_links.sh, which finds each symbolic link in the sysroot, and if
 in the local tree, then it is relinked to that file (instead of its absolute location from the remote system), and it is made relative so that the
 tree can be moved around without breaking the links. So, for example,
 
-	/usr/lib/libwhatever.so -> /usr/lib/whatever.6.so (broken)
+	/home/you/arm-sysroot/usr/lib/libwhatever.so -> /usr/lib/whatever.6.so (broken link or wrong file)
 		becomes
-	/usr/lib/libwhatever.so -> whatever.6.so (valid)
+	/home/you/arm_sysroot/usr/lib/libwhatever.so -> whatever.6.so (valid)
 	
 
 # Step 6: build gcc
@@ -134,17 +134,17 @@ So, if you are unsure what --host triplet to use, then you can, again, consult "
 
 ## ARM-Specific Notes
 Note "--with-cpu" and "--with-float". These switches fix the provided settings into the cross-compiler as defaults. These are necessary to compile for the Raspberry Pi Zero (W).
-The CPU setting probably specifies numerous details and features, mostly for the benefit of the assembler, which are specific to the processor core used in the chip, which
+The CPU setting probably specifies numerous details and features, mostly for the benefit of the assembler, which are specific to the processor core used in the chip which
 is actually a Broadcom product. Internally, it uses a processing unit from ARM called an arm1176jzf-s, which in turn is based on the armv6 instruction set. This cpu switch
 adds specific details about which particular arm processor to build for. We specify hardware floating point because this processor  has a vector unit, and it seems as though
-the software implementation is not compatible with the hardware implementation. Incidentally, Raspbian is little-endian, but it seems as though that gets accounted for somewhere,
+the software implementation is not compatible with the hardware implementation, or perhaps not interoperable with other binaries linked for hard float. Incidentally, Raspbian is little-endian, but it seems as though that gets accounted for somewhere,
 perhaps by default.
 
 # Step 7: build the gcc support library
 
 Note that we skip building libc because it is an invariant on the target system. We do not want to build our own libc only to wind up with a subtly different version
 which is subtly incompatible. The gcc support library provides a bridge between the executables the compiler produces and libc. It is mostly in charge of bootstrapping
-libc and shutting it down when the program exits. This includes implicit runtime link artifacts such as crt1.o and crti.o, etc.
+libc and shutting it down when the program exits. This includes implicitly linked runtime artifacts such as crt1.o and crti.o, etc.
 
 	make -j `nproc` all-target-libgcc
 	make install-target-libgcc
