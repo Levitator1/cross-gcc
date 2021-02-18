@@ -116,7 +116,7 @@ tree can be moved around without breaking the links. So, for example,
 
 	/home/you/arm-sysroot/usr/lib/libwhatever.so -> /usr/lib/whatever.6.so (broken link or wrong file)
 		becomes
-	/home/you/arm_sysroot/usr/lib/libwhatever.so -> whatever.6.so (valid)
+	/home/you/arm_sysroot/usr/lib/libwhatever.so -> libwhatever.6.so (valid)
 	
 
 # Step 6: build gcc
